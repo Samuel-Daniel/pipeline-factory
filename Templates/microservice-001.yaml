@@ -61,8 +61,13 @@ Parameters:
   CodePipeLineServiceRole:
     Description: CodePipeLineServiceRole
     Type:  'AWS::SSM::Parameter::Value<String>' 
-    Default: '/Roles/CodePipeline'
+    Default: '/Shared/Roles/CodePipeline'
 
+  CodeBuildServiceRole:
+    Description: CodeBuildServiceRole
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Shared/Roles/CodeBuild'
+    
   BucketArtifact:
     Description: BucketArtifact
     Type:  'AWS::SSM::Parameter::Value<String>' 
@@ -73,10 +78,6 @@ Parameters:
     Type:  'AWS::SSM::Parameter::Value<String>' 
     Default: '/Shared/KMSKeyArn'
 
-  CodeBuildServiceRole:
-    Description: CodeBuildServiceRole
-    Type:  'AWS::SSM::Parameter::Value<String>' 
-    Default: '/Roles/CodeBuild'
 
 Metadata:  
   AWS::CloudFormation::Interface:  
@@ -470,7 +471,7 @@ Resources:
     Type: "AWS::SSM::Parameter"
     Condition: BranchMaster
     Properties:
-      Name: !Sub TemplateName-${FeatureName}-${MicroServiceName}
+      Name: !Sub /App/${FeatureName}/${MicroServiceName}/TemplateName
       Type: "String"
       Value: !Ref TemplateName
 
@@ -478,6 +479,6 @@ Resources:
     Type: "AWS::SSM::Parameter"
     Condition: BranchMaster
     Properties:
-      Name: !Sub Runtime-${FeatureName}-${MicroServiceName}
+      Name: !Sub /App/${FeatureName}/${MicroServiceName}/Runtime
       Type: "String"
       Value: !Ref Runtime
