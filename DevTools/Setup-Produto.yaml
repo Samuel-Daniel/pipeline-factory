@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+
+  CriaFeaturePipeline:
+    Type: "AWS::Lambda::Function"
+    Properties: 
+      Handler: "index.lambda_handler"
+      Role: 
+        Fn::GetAtt: 
+          - "LambdaRole"
+          - "Arn"
+      Runtime: "python3.6"
+      Timeout: 25
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          def lambda_handler(event, context):
+              Region=event['region']
+              Account = event['account']
+              MicroServiceName = event['detail']['repositoryName']
+              Repo = event['detail']['repositoryName'].split('-',1)
+              NewBranch = event['detail']['referenceName']
+              CommitID = event['detail']['commitId']
+              if NewBranch == "master":
+                exit()
+              client = boto3.client('ssm')
+              response = client.get_parameter(
+                Name = 'TemplateName-%s' %(MicroServiceName)
+              )
+              TemplateName = response['Parameter']['Value']
+              client = boto3.client('ssm')
+              response = client.get_parameter(
+                Name = 'TemplateURL'
+              )
+              GetTemplateURL = response['Parameter']['Value']
+              client = boto3.client('ssm')
+              response = client.get_parameter(
+                Name = 'Runtime-%s' %(MicroServiceName)
+              )
+              Runtime = response['Parameter']['Value']
+              cf_client = boto3.client('cloudformation')
+              cf_client.create_stack(
+                  StackName= "Pipeline-%s-%s" %(Repo[1], NewBranch),
+                  TemplateURL='%s%s.yaml' %(GetTemplateURL,TemplateName),
+                  Parameters=[
+                      {
+                          'ParameterKey': 'MicroServiceName',
+                          'ParameterValue': Repo[1],
+                          'UsePreviousValue': False
+                      },
+                      {
+                          'ParameterKey': 'FeatureName',
+                          'ParameterValue': Repo[0],
+                          'UsePreviousValue': False
+                      },
+                      {
+                          'ParameterKey': 'Runtime',
+                          'ParameterValue': Runtime,
+                          'UsePreviousValue': False
+                      },
+                      {
+                          'ParameterKey': 'BranchName',
+                          'ParameterValue': NewBranch,
+                          'UsePreviousValue': False
+                      }
+                  ],
+                  OnFailure='ROLLBACK',
+                  Capabilities=['CAPABILITY_NAMED_IAM']
+              )
+
+              
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [lambda.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/job-function/SystemAdministrator
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+  CriaPipelineRule:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "EventRule"
+      EventPattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - 'CodeCommit Repository State Change'
+        detail:
+          event:
+            - referenceCreated
+          referenceType:
+            - branch
+      State: ENABLED
+      Targets: 
+      - Arn:
+          Fn::GetAtt:
+          - CriaFeaturePipeline
+          - Arn
+        Id:
+          Ref: CriaFeaturePipeline
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CriaFeaturePipeline
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceArn: 
+        Fn::GetAtt:
+          - CriaPipelineRule
+          - Arn

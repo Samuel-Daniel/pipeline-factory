@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  DevToolsAccount:
+    Description: AWS AccountNumber for DevTools Account
+    Type: Number
+
+Resources:
+
+  RoleCrossAccount:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: RoleCrossAccount
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Ref DevToolsAccount
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies: 
+        - 
+          PolicyName: "DevOpsPolicy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - 
+                Effect: "Allow"
+                Action: "*"
+                Resource: "*"
+
+  PolicyCrossAccount:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: DevOpsPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action:
+              - codecommit:BatchGetRepositories
+              - codecommit:Get*
+              - codecommit:GitPull
+              - codecommit:List*
+              - codecommit:CancelUploadArchive
+              - codecommit:UploadArchive
+              - codebuild:*
+              - s3:*
+              - kms:*
+            Resource: "*"
+      Roles:
+        -
+          !Ref RoleCrossAccount
+
