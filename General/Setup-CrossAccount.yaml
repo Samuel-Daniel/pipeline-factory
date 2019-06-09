@@ -58,6 +58,7 @@ Resources:
               - codecommit:CancelUploadArchive
               - codecommit:UploadArchive
               - codebuild:*
+              - cloudformation:*
               - s3:*
               - kms:*
             Resource: "*"

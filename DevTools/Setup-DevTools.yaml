@@ -356,6 +356,42 @@ Resources:
                 StackName: SetupProduto
               RunOrder: 2
 
+
+        - Name: ECS-Cluster-Teste
+          Actions:
+            - Name: ChangeSetECSTest
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ChangeSetName: ChangeSet-ECS-Cluster-Teste
+                ActionMode: CHANGE_SET_REPLACE
+                StackName: ECS-Cluster-Teste
+                Capabilities: CAPABILITY_NAMED_IAM
+                TemplatePath: !Join [ "::", [ "Out-Source", "templates/Setup-ECS-Cluster.yaml"]]
+                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/RoleCrossAccount
+              InputArtifacts:
+                - Name: Out-Source
+              RunOrder: 1
+              RoleArn: !Sub arn:aws:iam::${DevAccount}:role/RoleCrossAccount
+            - Name: DeployChangeSetTest
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ChangeSetName: sample-lambda-dev
+                ActionMode: CHANGE_SET_EXECUTE
+                StackName: sample-lambda-dev
+                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/RoleCrossAccount
+              InputArtifacts:
+                - Name: Out-Source
+              RunOrder: 2
+              RoleArn: !Sub arn:aws:iam::${DevAccount}:role/RoleCrossAccount
+
   CfnLint:
     Type: AWS::CodeBuild::Project
     Properties:
