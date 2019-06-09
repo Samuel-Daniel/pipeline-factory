@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Setup da conta DevTools"
+Description: "Template para Micro Servico | 001"
 
 Parameters:
   FeatureName:
@@ -67,7 +67,7 @@ Parameters:
     Description: CodeBuildServiceRole
     Type:  'AWS::SSM::Parameter::Value<String>' 
     Default: '/Shared/Roles/CodeBuild'
-    
+
   BucketArtifact:
     Description: BucketArtifact
     Type:  'AWS::SSM::Parameter::Value<String>' 
