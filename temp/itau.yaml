@@ -1,0 +1,625 @@
+AWSTemplateFormatVersion: '2010-09-09' 
+Description: Pipeline DevSecOps Itau 
+Parameters: 
+  Projeto: 
+    Description: Nome do Projeto 
+    Type: String 
+    Default: python-hello 
+  Runtime: 
+    Type: String 
+    AllowedValues:  
+      - 'java: openjdk8' 
+      - 'java: openjdk11'  
+      - 'dotnet: 2.2' 
+      - 'python: 3.7' 
+  RepoName: 
+    Description: "Nome do Repo CodeCommit" 
+    Type: String 
+    Default: python-hello 
+  BranchName: 
+    Description: "Nome da branch do Repo CodeCommit" 
+    Type: String 
+    Default: master 
+  ShardLibraryBranchName: 
+    Description: "Nome da branch do Repo CodeCommit" 
+    Type: String 
+    Default: master 
+ 
+  CrossAccountCondition: 
+    Description: Conditionally creates the resources for cross account access 
+    Type: String 
+    Default: false 
+  PublishCondition: 
+    Description: Conditionally creates the resources for cross account access 
+    Type: String 
+    Default: false 
+ 
+  AccountDev: 
+    Description: Conta de Desenvolvimento 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/cross/account-dev' 
+ 
+  AccountHom: 
+    Description: Conta de Homologacao 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/cross/account-hom' 
+ 
+  AccountProd: 
+    Description: Conta de Producao 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/cross/account-prod' 
+ 
+  AccountDevSecOps: 
+    Description: Conta de Producao 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/cross/account-devsecops' 
+ 
+  CMKARN: 
+    Description: Conta de Producao 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/pipeline/cmkarn' 
+ 
+  S3Bucket: 
+    Description: Conta de Producao 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/pipeline/s3bucket-cmk' 
+ 
+  RegionDev: 
+    Description: region de desenvolvimento 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/pipeline/region-dev' 
+ 
+  RegionHom: 
+    Description: Regiao de Homologacao 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/pipeline/region-hom' 
+ 
+  RegionProd: 
+    Description: Regiao de Homologacao 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/pipeline/region-prod' 
+ 
+  DevSecOpsRole: 
+    Description: Regiao de Homologacao 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/pipeline/devsecopsrole' 
+ 
+  TOKENAQUA: 
+    Description: Regiao de Homologacao 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/pipeline/aqua/token' 
+ 
+ 
+Metadata:  
+  AWS::CloudFormation::Interface:  
+    ParameterGroups:  
+      -  
+        Label:  
+          default: "Informacao do Projeto" 
+        Parameters:  
+          - Projeto 
+          - RepoName 
+          - BranchName 
+          - Runtime 
+      -  
+        Label:  
+          default: "Opcionais e Administrativas" 
+        Parameters:  
+          - CrossAccountCondition 
+          - PublishCondition 
+          - ShardLibraryBranchName 
+      -  
+        Label:  
+          default: "Parameter Store" 
+        Parameters:  
+          - AccountDev 
+          - AccountHom 
+          - AccountProd 
+          - AccountDevSecOps 
+          - CMKARN 
+          - S3Bucket 
+          - RegionDev 
+          - RegionHom 
+          - RegionProd 
+          - DevSecOpsRole 
+          - TOKENAQUA 
+ 
+ 
+Conditions: 
+  AddCodeBuildResource: !Equals [ !Ref CrossAccountCondition, true ] 
+  IsPublish:  !Equals [ !Ref PublishCondition, true ] 
+ 
+Resources: 
+ 
+  BuildProjectRole: 
+    Type: AWS::IAM::Role 
+    Properties: 
+      RoleName: !Sub ${Projeto}-CodeBuildRole 
+      AssumeRolePolicyDocument: 
+        Version: 2012-10-17 
+        Statement: 
+          - 
+            Effect: Allow 
+            Principal: 
+              Service: 
+                - codebuild.amazonaws.com 
+            Action: 
+              - sts:AssumeRole 
+      Path: / 
+  BuildProjectPolicy: 
+    Type: AWS::IAM::Policy 
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - Action: 
+              - ecr:GetAuthorizationToken 
+              - logs:CreateLogGroup 
+              - logs:CreateLogStream 
+              - logs:PutLogEvents 
+            Effect: Allow 
+            Resource: '*' 
+          - Action: 
+              - kms:Decrypt 
+              - kms:Encrypt 
+              - kms:* 
+            Effect: Allow 
+            Resource: !Ref CMKARN 
+          - Action: 
+              - ssm:GetParameters 
+            Effect: Allow 
+            Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*' 
+          - Action: 
+              - s3:PutObject 
+              - s3:GetObject 
+              - s3:GetObjectVersion 
+              - s3:GetBucketPolicy 
+              - s3:ListBucket 
+              - s3:GetBucketAcl 
+              - s3:GetBucketLocation 
+            Effect: Allow 
+            Resource:  
+              - !Sub arn:aws:s3:::${Projeto}-bucket 
+              - !Sub arn:aws:s3:::${Projeto}-bucket/* 
+          - Action:  
+              - codecommit:GitPull 
+              - codecommit:CancelUploadArchive 
+              - codecommit:GetBranch 
+              - codecommit:GetCommit 
+              - codecommit:GetUploadArchiveStatus 
+              - codecommit:UploadArchive 
+            Effect: Allow 
+            Resource: 
+              - !Sub arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${RepoName} 
+          - Action: 
+              - ecr:InitiateLayerUpload 
+              - ecr:UploadLayerPart 
+              - ecr:PutImage 
+              - ecr:CompleteLayerUpload 
+              - ecr:BatchCheckLayerAvailability 
+              - ecr:DescribeImages 
+              - ecr:DescribeRepositories 
+              - ecr:BatchGetImage 
+              - ecr:GetDownloadUrlForLayer 
+              - ecr:GetRepositoryPolicy 
+              - ecr:ListImages 
+            Effect: Allow 
+            Resource:  
+              - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${Projeto}-local 
+              - !Sub arn:aws:ecr:${RegionDev}:${AccountDev}:repository/${Projeto}-desenvolvimento 
+              - !Sub arn:aws:ecr:${RegionHom}:${AccountHom}:repository/${Projeto}-homologacao 
+              - !Sub arn:aws:ecr:${RegionProd}:${AccountProd}:repository/${Projeto}-producao 
+ 
+      PolicyName: Policy-Codebuild 
+      Roles: 
+        - !Ref 'BuildProjectRole' 
+ 
+  BuildTestUnit: 
+    Type: AWS::CodeBuild::Project 
+    Properties: 
+      Name: !Sub ${Projeto}-BuildTestUnit 
+      Description: !Ref Projeto 
+      EncryptionKey: !Ref CMKARN 
+      ServiceRole: !GetAtt BuildProjectRole.Arn 
+      Artifacts: 
+        Type: CODEPIPELINE 
+      Environment: 
+        Type: linuxContainer 
+        ComputeType: BUILD_GENERAL1_SMALL 
+        Image: aws/codebuild/standard:2.0 
+      Source: 
+        Type: CODEPIPELINE 
+        BuildSpec: !Join ["",['../01/',!Select [0, !Split [":", !Ref Runtime]] ,'/testunit/buildspec.yml' ]] 
+      TimeoutInMinutes: 10 
+      Tags: 
+        - Key: Name 
+          Value: !Ref Projeto 
+ 
+  BuildSonar: 
+    Type: AWS::CodeBuild::Project 
+    Properties: 
+      Name: !Sub ${Projeto}-BuildSonar 
+      Description: !Ref Projeto 
+      EncryptionKey: !Ref CMKARN 
+      ServiceRole: !GetAtt BuildProjectRole.Arn 
+      Artifacts: 
+        Type: CODEPIPELINE 
+      Environment: 
+        Type: linuxContainer 
+        ComputeType: BUILD_GENERAL1_SMALL 
+        Image: aws/codebuild/standard:2.0 
+      Source: 
+        Type: CODEPIPELINE         
+        BuildSpec: !Join ["",['../01/',!Select [0, !Split [":", !Ref Runtime]] ,'/sonarqube/buildspec.yml' ]] 
+      TimeoutInMinutes: 10 
+      Tags: 
+        - Key: Name 
+          Value: !Ref Projeto 
+ 
+  BuildSAST: 
+    Type: AWS::CodeBuild::Project 
+    Properties: 
+      Name: !Sub ${Projeto}-BuildSAST 
+      Description: !Ref Projeto 
+      EncryptionKey: !Ref CMKARN 
+      ServiceRole: !GetAtt BuildProjectRole.Arn 
+      Artifacts: 
+        Type: CODEPIPELINE 
+      Environment: 
+        Type: linuxContainer 
+        ComputeType: BUILD_GENERAL1_SMALL 
+        Image: aws/codebuild/standard:2.0 
+      Source: 
+        Type: CODEPIPELINE         
+        BuildSpec: !Join ["",['../01/',!Select [0, !Split [":", !Ref Runtime]] ,'/sast/buildspec.yml' ]] 
+      TimeoutInMinutes: 10 
+      Tags: 
+        - Key: Name 
+          Value: !Ref Projeto 
+ 
+ 
+  Build: 
+    Type: AWS::CodeBuild::Project 
+    Properties: 
+      Name: !Sub ${Projeto}-Build 
+      Description: !Ref Projeto 
+      EncryptionKey: !Ref CMKARN 
+      ServiceRole: !GetAtt BuildProjectRole.Arn 
+      Artifacts: 
+        Type: CODEPIPELINE 
+      Environment: 
+        Type: linuxContainer 
+        ComputeType: BUILD_GENERAL1_SMALL 
+        Image: aws/codebuild/standard:2.0 
+      Source: 
+        Type: CODEPIPELINE         
+        BuildSpec: !Join ["",['../01/',!Select [0, !Split [":", !Ref Runtime]] ,'/build/buildspec.yml' ]] 
+      TimeoutInMinutes: 10 
+      Tags: 
+        - Key: Name 
+          Value: !Ref Projeto 
+ 
+ 
+  BuildContainerSecurity: 
+    Type: AWS::CodeBuild::Project 
+    Properties: 
+      Name: !Sub ${Projeto}-BuildContainerSecurity 
+      Description: !Ref Projeto 
+      EncryptionKey: !Ref CMKARN 
+      ServiceRole: !GetAtt BuildProjectRole.Arn 
+      Artifacts: 
+        Type: CODEPIPELINE 
+      Environment: 
+        Type: linuxContainer 
+        ComputeType: BUILD_GENERAL1_SMALL 
+        Image: aws/codebuild/standard:2.0 
+        PrivilegedMode: true 
+        EnvironmentVariables:         
+          - Name: TOKEN_AQUA 
+            Value: !Ref TOKENAQUA 
+          - Name: s3bucket 
+            Value: !Sub ${Projeto}-reports 
+ 
+      Source: 
+        Type: CODEPIPELINE 
+        BuildSpec: !Join ["",['',!Select [0, !Split [":", !Ref Runtime]] ,'/container-security/buildspec.yml' ]] 
+      TimeoutInMinutes: 10 
+      Tags: 
+        - Key: Name 
+          Value: BuildAQUA 
+ 
+  Publish: 
+    Type: AWS::CodeBuild::Project 
+    Properties: 
+      Name: !Sub ${Projeto}-Publish 
+      Description: !Ref Projeto 
+      EncryptionKey: !Ref CMKARN 
+      ServiceRole: !GetAtt BuildProjectRole.Arn 
+      Artifacts: 
+        Type: CODEPIPELINE 
+      Environment: 
+        Type: linuxContainer 
+        ComputeType: BUILD_GENERAL1_SMALL 
+        Image: aws/codebuild/standard:2.0 
+        PrivilegedMode: true 
+        EnvironmentVariables:         
+          - Name: REPOSITORY 
+            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Projeto}-local 
+      Source: 
+        Type: CODEPIPELINE 
+        BuildSpec: !Join ["",['',!Select [0, !Split [":", !Ref Runtime]] ,'/publish/buildspec.yml' ]] 
+      TimeoutInMinutes: 10 
+      Tags: 
+        - Key: Name 
+          Value: BuildPublish 
+ 
+ 
+  S3BucketPolicy: 
+    Type: AWS::S3::BucketPolicy 
+    Properties: 
+      Bucket: !Ref S3Bucket 
+      PolicyDocument: 
+        Statement: 
+          - 
+            Action: 
+              - s3:* 
+            Effect: Allow 
+            Resource: 
+              - !Sub arn:aws:s3:::${S3Bucket} 
+              - !Sub arn:aws:s3:::${S3Bucket}/* 
+            Principal: 
+              AWS: 
+                - !Sub arn:aws:iam::${AccountDevSecOps}:role/${DevSecOpsRole} 
+                - !GetAtt [BuildProjectRole,Arn] 
+ 
+  PipeLineRole: 
+    Type: AWS::IAM::Role 
+    Properties: 
+      RoleName: !Sub ${Projeto}-codepipeline-role 
+      AssumeRolePolicyDocument: 
+        Version: 2012-10-17 
+        Statement: 
+          - 
+            Effect: Allow 
+            Principal: 
+              Service: 
+                - codepipeline.amazonaws.com 
+            Action: 
+              - sts:AssumeRole 
+      Path: / 
+  PipelinePolicy: 
+    Type: AWS::IAM::Policy 
+    DependsOn: S3BucketPolicy 
+    Properties: 
+      PolicyName: !Sub ${Projeto}-codepipeline-policy 
+      PolicyDocument: 
+        Version: 2012-10-17 
+        Statement: 
+          - 
+            Effect: Allow 
+            Action: 
+              - codepipeline:* 
+              - iam:ListRoles 
+              - cloudformation:Describe* 
+              - cloudFormation:List* 
+              - codecommit:List* 
+              - codecommit:Get* 
+              - codecommit:GitPull 
+              - codecommit:UploadArchive 
+              - codecommit:CancelUploadArchive 
+              - codebuild:BatchGetBuilds 
+              - codebuild:StartBuild 
+              - cloudformation:CreateStack 
+              - cloudformation:DeleteStack 
+              - cloudformation:DescribeStacks 
+              - cloudformation:UpdateStack 
+              - cloudformation:CreateChangeSet 
+              - cloudformation:DeleteChangeSet 
+              - cloudformation:DescribeChangeSet 
+              - cloudformation:ExecuteChangeSet 
+              - cloudformation:SetStackPolicy 
+              - cloudformation:ValidateTemplate 
+              - iam:PassRole 
+              - s3:ListAllMyBuckets 
+              - s3:GetBucketLocation 
+            Resource: 
+              - "*" 
+          - 
+            Effect: Allow 
+            Action: 
+              - kms:Decrypt 
+            Resource: !Ref CMKARN 
+          - 
+            Effect: Allow 
+            Action: 
+              - s3:PutObject 
+              - s3:GetBucketPolicy 
+              - s3:GetObject 
+              - s3:ListBucket 
+            Resource: 
+              - !Sub arn:aws:s3:::${S3Bucket} 
+              - !Sub arn:aws:s3:::${S3Bucket}/* 
+ 
+          - Action:  
+              - codecommit:GitPull 
+              - codecommit:CancelUploadArchive 
+              - codecommit:GetBranch 
+              - codecommit:GetCommit 
+              - codecommit:GetUploadArchiveStatus 
+              - codecommit:UploadArchive 
+            Effect: Allow 
+            Resource: 
+              - !Sub arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${Projeto} 
+          - 
+            Effect: Allow 
+            Action: 
+              - kms:* 
+            Resource: !Ref CMKARN 
+          - 
+            Effect: Allow 
+            Action: 
+              - sts:AssumeRole 
+            Resource: 
+              - !Sub arn:aws:iam::${AccountDevSecOps}:role/${DevSecOpsRole} 
+      Roles: 
+        - 
+          !Ref PipeLineRole 
+ 
+  Pipeline: 
+    Type: AWS::CodePipeline::Pipeline 
+    Properties: 
+      RoleArn: !GetAtt PipeLineRole.Arn 
+      Name: !Ref AWS::StackName 
+      Stages: 
+        - Name: Source 
+          Actions: 
+            - Name: "Source" 
+              ActionTypeId: 
+                Category: Source 
+                Owner: AWS 
+                Provider: CodeCommit 
+                Version: "1" 
+              Configuration: 
+                BranchName: !Ref BranchName 
+                RepositoryName: !Ref RepoName 
+              InputArtifacts: [] 
+              OutputArtifacts: 
+                - Name: App 
+              RunOrder: 1 
+            - Name: "SharedLibrary" 
+              ActionTypeId: 
+                Category: Source 
+                Owner: AWS 
+                Version: 1 
+                Provider: CodeCommit 
+              Configuration: 
+                RepositoryName: pipelineaws-sharedlibrary 
+                BranchName: !Ref ShardLibraryBranchName 
+              OutputArtifacts: 
+                - Name: Libs 
+              RunOrder: 1 
+              RoleArn: 
+                  Fn::If: 
+                  - AddCodeBuildResource 
+                  - !Sub arn:aws:iam::${AccountDevSecOps}:role/${DevSecOpsRole} 
+                  - !Ref AWS::NoValue 
+               
+        - Name: "Continuous-Integration" 
+          Actions: 
+            - Name: "TestUnit" 
+              ActionTypeId: 
+                Category: Build 
+                Owner: AWS 
+                Provider: CodeBuild 
+                Version: "1" 
+              InputArtifacts: 
+                - Name: App 
+                - Name: Libs                 
+              Configuration: 
+                ProjectName: !Sub ${Projeto}-BuildTestUnit 
+                PrimarySource: App 
+              OutputArtifacts: 
+                - Name: TestUnit                 
+              RunOrder: 1               
+ 
+            - Name: "Build" 
+              ActionTypeId: 
+                Category: Build 
+                Owner: AWS 
+                Provider: CodeBuild 
+                Version: "1" 
+              InputArtifacts: 
+                - Name: App 
+                - Name: Libs                 
+              Configuration: 
+                ProjectName: !Sub ${Projeto}-Build 
+                PrimarySource: App 
+              OutputArtifacts: 
+                - Name: Build 
+              RunOrder: 1               
+ 
+            - Name: "SonarQube" 
+              ActionTypeId: 
+                Category: Build 
+                Owner: AWS 
+                Provider: CodeBuild 
+                Version: "1" 
+              InputArtifacts: 
+                - Name: App 
+                - Name: Libs                 
+              Configuration: 
+                ProjectName: !Sub ${Projeto}-BuildSonar 
+                PrimarySource: App 
+              OutputArtifacts: 
+                - Name: Sonar 
+              RunOrder: 1               
+ 
+            - Name: "SAST-Fortify" 
+              ActionTypeId: 
+                Category: Build 
+                Owner: AWS 
+                Provider: CodeBuild 
+                Version: "1" 
+              InputArtifacts: 
+                - Name: App 
+                - Name: Libs                 
+              Configuration: 
+                ProjectName: !Sub ${Projeto}-BuildSAST 
+                PrimarySource: App 
+              OutputArtifacts: 
+                - Name: Fortify 
+              RunOrder: 1               
+ 
+            - Name: "Container-Security-AQUA" 
+              ActionTypeId: 
+                Category: Build 
+                Owner: AWS 
+                Provider: CodeBuild 
+                Version: "1" 
+              InputArtifacts: 
+                - Name: App 
+                - Name: Libs                 
+                - Name: Build                
+              Configuration: 
+                ProjectName: !Sub ${Projeto}-BuildContainerSecurity 
+                PrimarySource: Libs 
+              OutputArtifacts: 
+                - Name: AQUA                 
+              RunOrder: 2               
+ 
+        - !If 
+            - IsPublish 
+            - Name: "Publish"           
+              Actions: 
+                - Name: "Publish" 
+                  ActionTypeId: 
+                    Category: Build 
+                    Owner: AWS 
+                    Provider: CodeBuild 
+                    Version: "1" 
+                  InputArtifacts: 
+                    - Name: App 
+                    - Name: Build 
+                    - Name: Libs                 
+                  Configuration: 
+                    ProjectName: !Sub ${Projeto}-Publish 
+                    PrimarySource: Libs 
+                  OutputArtifacts: 
+                    - Name: Publish                 
+                  RunOrder: 1   
+            - !Ref AWS::NoValue 
+ 
+      ArtifactStore: 
+        Type: S3 
+        Location: !Ref S3Bucket 
+        EncryptionKey: 
+          Id: !Ref CMKARN 
+          Type: KMS 
+ 
+  ArtifactStore: 
+    Type: AWS::S3::Bucket 
+    Properties: 
+       BucketName: !Sub ${Projeto}-reports 
+       WebsiteConfiguration: 
+          ErrorDocument: index.html 
+          IndexDocument: index.html 
+ 
