@@ -4,31 +4,31 @@ ProducteName="iti"
 FeatureName="onboarding"
 
 # Product Accounts
-DevToolsAccount=935187548418
-DevAccount=255538382414
-HomologAccount=450454659259
-ProdAccount=754190108602
+DevToolsAccount="935187548418"
+DevAccount="255538382414"
+HomologAccount="450454659259"
+ProdAccount="754190108602"
 
 #Shared Account
-DevOpsAccount=300003219274
-ArchitectureAccount=000000000000
+DevOpsAccount="300003219274"
+ArchitectureAccount="000000000000"
 
 
 # Create CrossAccount Roles
 aws cloudformation deploy --stack-name RoleCrossAccount --template-file General/SetupCrossAccount.yaml --capabilities CAPABILITY_NAMED_IAM \
---parameter-overrides DevToolsAccount=$DevToolsAccount --profile DevAccount
-
+--parameter-overrides DevToolsAccount=$DevToolsAccount --profile DevAccount \
+&
 aws cloudformation deploy --stack-name RoleCrossAccount --template-file General/SetupCrossAccount.yaml --capabilities CAPABILITY_NAMED_IAM \
---parameter-overrides DevToolsAccount=$DevToolsAccount --profile HomologAccount
-
+--parameter-overrides DevToolsAccount=$DevToolsAccount --profile HomologAccount \
+&
 aws cloudformation deploy --stack-name RoleCrossAccount --template-file General/SetupCrossAccount.yaml --capabilities CAPABILITY_NAMED_IAM \
---parameter-overrides DevToolsAccount=$DevToolsAccount --profile ProdAccount
-
+--parameter-overrides DevToolsAccount=$DevToolsAccount --profile ProdAccount \
+&
 aws cloudformation deploy --stack-name RoleCrossAccount --template-file General/SetupCrossAccount.yaml --capabilities CAPABILITY_NAMED_IAM \
 --parameter-overrides DevToolsAccount=$DevToolsAccount --profile DevOpsAccount
 
 
 # Create StackBase @ DevTools Account
-aws cloudformation deploy --stack-name Setup-DevTools  --template-file DevTools-Account/Setup-DevTools.yaml --capabilities CAPABILITY_NAMED_IAM \
+aws cloudformation deploy --stack-name Setup-DevTools  --template-file DevTools/Setup-DevTools.yaml --capabilities CAPABILITY_NAMED_IAM \
 --parameter-overrides DevOpsAccount=$DevOpsAccount DevAccount=$DevAccount HomologAccount=$HomologAccount ProdAccount=$ProdAccount \
 --profile DevToolsAccount

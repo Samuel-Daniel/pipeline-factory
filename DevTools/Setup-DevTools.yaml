@@ -1,17 +1,17 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
   DevOpsAccount:
-    Description: DevAccount
-    Type:  Number
+    Description: DevOpsAccount
+    Type:  String
   DevAccount:
     Description: DevAccount
-    Type:  Number
+    Type:  String
   HomologAccount:
     Description: HomologAccount
-    Type:  Number
+    Type:  String
   ProdAccount:
     Description: ProdAccount
-    Type:  Number
+    Type:  String
   TemplateURL:
     Description: TemplateURL
     Type:  String
@@ -339,7 +339,7 @@ Resources:
                 RoleArn: !GetAtt CodePipeLineServiceRole.Arn
                 StackName: SetupProduto
                 ChangeSetName: SetupProduto-ChangeSet
-                TemplatePath: !Join [ "::", [ "Out-Source", "templates/SetupProduto.yaml"]]
+                TemplatePath: !Join [ "::", [ "Out-Source", "templates/Setup-Produto.yaml"]]
               InputArtifacts:
                 - Name: Out-Source
               RunOrder: 1
