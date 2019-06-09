@@ -25,10 +25,9 @@ aws cloudformation deploy --stack-name RoleCrossAccount --template-file General/
 --parameter-overrides DevToolsAccount=$DevToolsAccount --profile ProdAccount \
 &
 aws cloudformation deploy --stack-name RoleCrossAccount --template-file General/SetupCrossAccount.yaml --capabilities CAPABILITY_NAMED_IAM \
---parameter-overrides DevToolsAccount=$DevToolsAccount --profile DevOpsAccount
-
-
-# Create StackBase @ DevTools Account
+--parameter-overrides DevToolsAccount=$DevToolsAccount --profile DevOpsAccount \
+&
 aws cloudformation deploy --stack-name Setup-DevTools  --template-file DevTools/Setup-DevTools.yaml --capabilities CAPABILITY_NAMED_IAM \
 --parameter-overrides DevOpsAccount=$DevOpsAccount DevAccount=$DevAccount HomologAccount=$HomologAccount ProdAccount=$ProdAccount \
 --profile DevToolsAccount
+# Create StackBase @ DevTools Account
