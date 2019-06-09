@@ -27,17 +27,17 @@ Resources:
                 exit()
               client = boto3.client('ssm')
               response = client.get_parameter(
-                Name = 'TemplateName-%s' %(MicroServiceName)
+                Name = '/App/%s/%s/TemplateName' %(Repo[0], Repo[1])
               )
               TemplateName = response['Parameter']['Value']
               client = boto3.client('ssm')
               response = client.get_parameter(
-                Name = 'TemplateURL'
+                Name = '/Shared/TemplateURL' 
               )
               GetTemplateURL = response['Parameter']['Value']
               client = boto3.client('ssm')
               response = client.get_parameter(
-                Name = 'Runtime-%s' %(MicroServiceName)
+                Name = '/App/%s/%s/Runtime' %(Repo[0], Repo[1])
               )
               Runtime = response['Parameter']['Value']
               cf_client = boto3.client('cloudformation')
