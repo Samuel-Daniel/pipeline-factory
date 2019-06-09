@@ -391,7 +391,7 @@ Resources:
   KMSKeyArnParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "KMSKeyArn"
+      Name: "/Shared/KMSKeyArn"
       Type: "String"
       Value: !GetAtt KMSKey.Arn
       Description: "KMSKeyArn"
@@ -399,7 +399,7 @@ Resources:
   KMSAliasParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "KMSAlias"
+      Name: "/Shared/KMSAlias"
       Type: "String"
       Value: !Ref KMSAlias
       Description: "KMSAlias"
@@ -407,7 +407,7 @@ Resources:
   DevAccountParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "DevAccount"
+      Name: "/Accounts/Dev"
       Type: "String"
       Value: !Ref DevAccount
       Description: "ID da conta de Desenvolvimento"
@@ -415,7 +415,7 @@ Resources:
   HomologAccountParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "HomologAccount"
+      Name: "/Accounts/Homolog"
       Type: "String"
       Value: !Ref HomologAccount
       Description: "ID da conta de Homolog"
@@ -423,7 +423,7 @@ Resources:
   ProdAccountParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "ProdAccount"
+      Name: "/Accounts/Prod"
       Type: "String"
       Value: !Ref ProdAccount
       Description: "ID da conta de Prod"
@@ -431,7 +431,7 @@ Resources:
   DevOpsAccountParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "DevOpsAccount"
+      Name: "/Accounts/DevOps"
       Type: "String"
       Value: !Ref DevOpsAccount
       Description: "ID da conta de DevOps"
@@ -439,7 +439,7 @@ Resources:
   CodePipeLineServiceRoleParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "CodePipeLineServiceRole"
+      Name: "/Roles/CodePipeline"
       Type: "String"
       Value: !GetAtt CodePipeLineServiceRole.Arn
       Description: "CodePipeLineServiceRole"
@@ -447,7 +447,7 @@ Resources:
   CodeBuildServiceRoleParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "CodeBuildServiceRole"
+      Name: "/Roles/CodeBuild"
       Type: "String"
       Value: !GetAtt CodeBuildServiceRole.Arn
       Description: "CodeBuildServiceRole"
@@ -455,14 +455,14 @@ Resources:
   TemplateURLParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "TemplateURL"
+      Name: "/Shared/TemplateURL"
       Type: "String"
       Value: !Ref TemplateURL
 
   BucketArtifactParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: "BucketArtifact"
+      Name: "/Shared/BucketArtifact"
       Type: "String"
       Value: !Ref BucketArtifact
       Description: "BucketArtifact"

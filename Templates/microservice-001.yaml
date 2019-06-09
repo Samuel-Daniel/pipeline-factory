@@ -41,42 +41,42 @@ Parameters:
   DevOpsAccount:
     Description: DevOpsAccount
     Type:  'AWS::SSM::Parameter::Value<String>' 
-    Default: 'DevOpsAccount'
+    Default: '/Accounts/DevOps'
 
   DevAccount:
     Description: DevAccount
     Type:  'AWS::SSM::Parameter::Value<String>' 
-    Default: 'DevAccount'
+    Default: '/Accounts/Dev'
 
   HomologAccount:
     Description: HomologAccount
     Type:  'AWS::SSM::Parameter::Value<String>' 
-    Default: 'HomologAccount'
+    Default: '/Accounts/Homolog'
 
   ProdAccount:
     Description: ProdAccount
     Type:  'AWS::SSM::Parameter::Value<String>' 
-    Default: 'ProdAccount'
+    Default: '/Accounts/Prod'
 
   CodePipeLineServiceRole:
     Description: CodePipeLineServiceRole
     Type:  'AWS::SSM::Parameter::Value<String>' 
-    Default: 'CodePipeLineServiceRole'
+    Default: '/Roles/CodePipeline'
 
   BucketArtifact:
     Description: BucketArtifact
     Type:  'AWS::SSM::Parameter::Value<String>' 
-    Default: 'BucketArtifact'
+    Default: '/Shared/BucketArtifact'
 
   KMSKeyArn:
     Description: KMSKeyArn
     Type:  'AWS::SSM::Parameter::Value<String>' 
-    Default: 'KMSKeyArn'
+    Default: '/Shared/KMSKeyArn'
 
   CodeBuildServiceRole:
     Description: CodeBuildServiceRole
     Type:  'AWS::SSM::Parameter::Value<String>' 
-    Default: 'CodeBuildServiceRole'
+    Default: '/Roles/CodeBuild'
 
 Metadata:  
   AWS::CloudFormation::Interface:  

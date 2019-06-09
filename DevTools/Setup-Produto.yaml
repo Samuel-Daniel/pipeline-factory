@@ -69,7 +69,6 @@ Resources:
                   OnFailure='ROLLBACK',
                   Capabilities=['CAPABILITY_NAMED_IAM']
               )
-
               
   LambdaRole:
     Type: AWS::IAM::Role

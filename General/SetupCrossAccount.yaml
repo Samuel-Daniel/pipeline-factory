@@ -9,6 +9,10 @@ Resources:
 
   RoleCrossAccount:
     Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F3
     Properties:
       RoleName: RoleCrossAccount
       AssumeRolePolicyDocument:
@@ -35,6 +39,10 @@ Resources:
 
   PolicyCrossAccount:
     Type: AWS::IAM::Policy
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F4
     Properties:
       PolicyName: DevOpsPolicy
       PolicyDocument:
