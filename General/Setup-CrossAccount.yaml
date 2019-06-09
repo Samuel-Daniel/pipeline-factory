@@ -59,6 +59,7 @@ Resources:
               - codecommit:UploadArchive
               - codebuild:*
               - cloudformation:*
+              - iam:*
               - s3:*
               - kms:*
             Resource: "*"
