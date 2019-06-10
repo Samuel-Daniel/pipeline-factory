@@ -3,23 +3,21 @@ AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
   DevToolsAccount:
     Description: AWS AccountNumber for DevTools Account
-    Type: Number
+    Type: String
 
-  KMSKeyArn:
+  CMKARN:
     Type: String
     Default: arn:aws:kms:sa-east-1:935187548418:key/3adbf5d0-a9a9-449d-b5b3-3f3473d6c1f3
 
+  BucketArtifact:
+    Type: String
+    Default: setup-devtools-bucketartifact-17pvzdmftdmqw
 
 Resources:
-
-  RoleCrossAccount:
+  CFRole:
     Type: AWS::IAM::Role
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: F3
     Properties:
-      RoleName: RoleCrossAccount
+      RoleName: !Sub ToolsAcctCodePipelineCloudFormationRole
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -31,55 +29,47 @@ Resources:
             Action:
               - sts:AssumeRole
       Path: /
-      Policies: 
-        - 
-          PolicyName: "DevOpsPolicy"
-          PolicyDocument: 
-            Version: "2012-10-17"
-            Statement: 
-              - 
-                Effect: "Allow"
-                Action: "*"
-                Resource: "*"
-
-  PolicyCrossAccount:
+  CFPolicy:
     Type: AWS::IAM::Policy
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: F4
     Properties:
-      PolicyName: DevOpsPolicy
+      PolicyName: !Sub ToolsAcctCodePipelineCloudFormationPolicy
       PolicyDocument:
         Version: 2012-10-17
         Statement:
           -
             Effect: Allow
             Action:
-              - codecommit:BatchGetRepositories
-              - codecommit:Get*
-              - codecommit:GitPull
-              - codecommit:List*
-              - codecommit:CancelUploadArchive
-              - codecommit:UploadArchive
-              - codebuild:*
               - cloudformation:*
-              - iam:*
               - s3:*
-              - kms:*
+              - iam:PassRole
             Resource: "*"
+          -
+            Effect: Allow
+            Action:
+              - kms:*
+            Resource: !Ref CMKARN
       Roles:
         -
-          !Ref RoleCrossAccount
-
- 
-    Type: AWS::IAM::Policy
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: F4
+          !Ref CFRole
+  CFDeployerRole:
+    Type: AWS::IAM::Role
     Properties:
-      PolicyName: cloudformationdeployer-policy
+      RoleName: !Sub cloudformationdeployer-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+  CFDeployerPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub cloudformationdeployer-policy
       PolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -95,7 +85,7 @@ Resources:
               - lambda:GetFunctionConfiguration
               - lambda:GetFunction
               - lambda:UpdateFunctionConfiguration
-              - events:* 
+              - events:* # Required for the sample lambda function to work
               - iam:CreateRole
               - iam:CreatePolicy
               - iam:GetRole
@@ -112,7 +102,9 @@ Resources:
               - s3:GetBucketPolicy
               - s3:GetObject
               - s3:ListBucket
-            Resource: "*"
+            Resource:
+             - !Join ['',['arn:aws:s3:::',!Ref BucketArtifact, '/*']]
+             - !Join ['',['arn:aws:s3:::',!Ref BucketArtifact]]
       Roles:
         -
           !Ref CFDeployerRole
