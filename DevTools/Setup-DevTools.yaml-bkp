@@ -1,17 +1,17 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
   DevOpsAccount:
-    Description: DevAccount
-    Type:  Number
+    Description: DevOpsAccount
+    Type:  String
   DevAccount:
     Description: DevAccount
-    Type:  Number
+    Type:  String
   HomologAccount:
     Description: HomologAccount
-    Type:  Number
+    Type:  String
   ProdAccount:
     Description: ProdAccount
-    Type:  Number
+    Type:  String
   TemplateURL:
     Description: TemplateURL
     Type:  String
@@ -199,6 +199,7 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:iam::${DevOpsAccount}:role/RoleCrossAccount"
                   - !Sub "arn:aws:iam::${DevAccount}:role/RoleCrossAccount"
+                  - !Sub "arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole"
                   - !Sub "arn:aws:iam::${HomologAccount}:role/RoleCrossAccount"
                   - !Sub "arn:aws:iam::${ProdAccount}:role/RoleCrossAccount"
               -
@@ -262,6 +263,7 @@ Resources:
                   - "kms:GenerateDataKey*"
                   - "kms:DescribeKey"
                 Resource: !GetAtt KMSKey.Arn
+
 
   CodeCommitRepositoryInfraBase:
     Type: AWS::CodeCommit::Repository
@@ -338,7 +340,7 @@ Resources:
                 RoleArn: !GetAtt CodePipeLineServiceRole.Arn
                 StackName: SetupProduto
                 ChangeSetName: SetupProduto-ChangeSet
-                TemplatePath: !Join [ "::", [ "Out-Source", "templates/SetupProduto.yaml"]]
+                TemplatePath: !Join [ "::", [ "Out-Source", "templates/Setup-Produto.yaml"]]
               InputArtifacts:
                 - Name: Out-Source
               RunOrder: 1
@@ -354,6 +356,42 @@ Resources:
                 RoleArn: !GetAtt CodePipeLineServiceRole.Arn
                 StackName: SetupProduto
               RunOrder: 2
+
+
+        - Name: ECS-Cluster-Teste
+          Actions:
+            - Name: ChangeSetECSTest
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ChangeSetName: ChangeSet-ECS-Cluster-Teste
+                ActionMode: CHANGE_SET_REPLACE
+                StackName: ECS-Cluster-Teste
+                Capabilities: CAPABILITY_NAMED_IAM
+                TemplatePath: !Join [ "::", [ "Out-Source", "templates/Setup-ECS-Cluster.yaml"]]
+                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
+              InputArtifacts:
+                - Name: Out-Source
+              RunOrder: 1
+              RoleArn: !GetAtt CodePipeLineServiceRole.Arn
+            - Name: DeployChangeSetTest
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ChangeSetName: sample-lambda-dev
+                ActionMode: CHANGE_SET_EXECUTE
+                StackName: sample-lambda-dev
+                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
+              InputArtifacts:
+                - Name: Out-Source
+              RunOrder: 2
+              RoleArn: !GetAtt CodePipeLineServiceRole.Arn
 
   CfnLint:
     Type: AWS::CodeBuild::Project
@@ -386,89 +424,6 @@ Resources:
         Type: CODEPIPELINE
       ServiceRole: !Ref CodeBuildServiceRole
       TimeoutInMinutes: 10
-
-  CriaFeaturePipeline:
-    Type: "AWS::Lambda::Function"
-    Properties: 
-      Handler: "index.lambda_handler"
-      Role: 
-        Fn::GetAtt: 
-          - "LambdaRole"
-          - "Arn"
-      Runtime: "python3.6"
-      Timeout: 25
-      Code:
-        ZipFile: |
-          import boto3
-          import os
-          def lambda_handler(event, context):
-              Region=event['region']
-              Account = event['account']
-              MicroServiceName = event['detail']['repositoryName']
-              Repo = event['detail']['repositoryName'].split('-',1)
-              NewBranch = event['detail']['referenceName']
-              CommitID = event['detail']['commitId']
-              if NewBranch == "master":
-                exit()
-              client = boto3.client('ssm')
-              response = client.get_parameter(
-                Name = '/App/%s/%s/TemplateName' %(Repo[0], Repo[1])
-              )
-              TemplateName = response['Parameter']['Value']
-              client = boto3.client('ssm')
-              response = client.get_parameter(
-                Name = '/Shared/TemplateURL' 
-              )
-              GetTemplateURL = response['Parameter']['Value']
-              client = boto3.client('ssm')
-              response = client.get_parameter(
-                Name = '/App/%s/%s/Runtime' %(Repo[0], Repo[1])
-              )
-              Runtime = response['Parameter']['Value']
-              cf_client = boto3.client('cloudformation')
-              cf_client.create_stack(
-                  StackName= "Pipeline-%s-%s" %(Repo[1], NewBranch),
-                  TemplateURL='%s%s.yaml' %(GetTemplateURL,TemplateName),
-                  Parameters=[
-                      {
-                          'ParameterKey': 'MicroServiceName',
-                          'ParameterValue': Repo[1],
-                          'UsePreviousValue': False
-                      },
-                      {
-                          'ParameterKey': 'FeatureName',
-                          'ParameterValue': Repo[0],
-                          'UsePreviousValue': False
-                      },
-                      {
-                          'ParameterKey': 'Runtime',
-                          'ParameterValue': Runtime,
-                          'UsePreviousValue': False
-                      },
-                      {
-                          'ParameterKey': 'BranchName',
-                          'ParameterValue': NewBranch,
-                          'UsePreviousValue': False
-                      }
-                  ],
-                  OnFailure='ROLLBACK',
-                  Capabilities=['CAPABILITY_NAMED_IAM']
-              )
-              
-  LambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-        - Action: ['sts:AssumeRole']
-          Effect: Allow
-          Principal:
-            Service: [lambda.amazonaws.com]
-        Version: '2012-10-17'
-      Path: /
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/job-function/SystemAdministrator
-        - arn:aws:iam::aws:policy/AdministratorAccess
 
   KMSKeyArnParameter:
     Type: "AWS::SSM::Parameter"
@@ -549,11 +504,3 @@ Resources:
       Type: "String"
       Value: !Ref BucketArtifact
       Description: "BucketArtifact"
-
-  CriaFeaturePipelineParameter:
-    Type: "AWS::SSM::Parameter"
-    Properties:
-      Name: "/Shared/CriaFeaturePipeline"
-      Type: "String"
-      Value: !GetAtt CriaFeaturePipeline.Arn
-      Description: "CriaFeaturePipeline"

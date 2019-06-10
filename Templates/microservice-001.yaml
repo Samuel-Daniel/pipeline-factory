@@ -78,6 +78,10 @@ Parameters:
     Type:  'AWS::SSM::Parameter::Value<String>' 
     Default: '/Shared/KMSKeyArn'
 
+  CriaFeaturePipeline:
+    Description: CriaFeaturePipeline
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Shared/CriaFeaturePipeline'
 
 Metadata:  
   AWS::CloudFormation::Interface:  
@@ -466,6 +470,37 @@ Resources:
         Type: CODEPIPELINE
         BuildSpec: buildspec/publish.yml
       TimeoutInMinutes: 10
+
+  CriaPipelineRule:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "EventRule"
+      EventPattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - 'CodeCommit Repository State Change'
+        detail:
+          event:
+            - referenceCreated
+          referenceType:
+            - branch
+      State: ENABLED
+      Targets: 
+      - Arn: !Ref CriaFeaturePipeline
+        Id: CriaFeaturePipeline
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CriaFeaturePipeline
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceArn: 
+        Fn::GetAtt:
+          - CriaPipelineRule
+          - Arn
+
 
   TemplateNameParameter:
     Type: "AWS::SSM::Parameter"

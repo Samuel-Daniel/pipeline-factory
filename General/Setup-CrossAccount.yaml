@@ -3,7 +3,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
   DevToolsAccount:
     Description: AWS AccountNumber for DevTools Account
-    Type: Number
+    Type: String
 
   KMSKeyArn:
     Type: String
@@ -71,5 +71,6 @@ Resources:
       Roles:
         -
           !Ref RoleCrossAccount
+
 
  

@@ -1,0 +1,299 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  DevOpsAccount:
+    Description: DevOpsAccount
+    Type:  String
+  DevAccount:
+    Description: DevAccount
+    Type:  String
+  HomologAccount:
+    Description: HomologAccount
+    Type:  String
+  ProdAccount:
+    Description: ProdAccount
+    Type:  String
+  TemplateURL:
+    Description: TemplateURL
+    Type:  String
+    Default: "https://buenoh.s3.amazonaws.com/cfn-templates/"
+
+Resources:
+
+  CodePipeLineServiceRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F3
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+                - lambda.amazonaws.com
+                - codebuild.amazonaws.com
+                - cloudformation.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+       -
+          PolicyName: "CodePipelinePolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "s3:DeleteObject"
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                  - "s3:ListBucket"
+                  - "s3:PutObject"
+                  - "s3:GetBucketPolicy"
+                Resource: "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "cloudformation:*"
+                  - "lambda:*"
+                  - "iam:*"
+                  - "events:*"
+                Resource: "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "ssm:GetParameters"
+                  - "ssm:GetParameter"
+                  - "ssm:GetParametersByPath"
+                  - "ssm:GetParameterHistory"
+                  - "ssm:PutParameter"
+                Resource: "*" 
+              -
+                Effect: "Allow"
+                Action:
+                  - "codecommit:ListBranches"
+                  - "codecommit:ListRepositories"
+                  - "codecommit:BatchGetRepositories"
+                  - "codecommit:Get*"
+                  - "codecommit:GitPull"
+                  - "codecommit:UploadArchive"
+                  - "codecommit:GetBranch" 
+                Resource: "*"               
+              -
+                Effect: "Allow"
+                Action:
+                  - "codebuild:StartBuild"
+                  - "codebuild:BatchGetBuilds"
+                Resource:
+                  - "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "iam:PassRole"
+                Resource:
+                  - "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "sts:AssumeRole"
+                Resource:
+                  - !Sub "arn:aws:iam::${DevOpsAccount}:role/RoleCrossAccount"
+                  - !Sub "arn:aws:iam::${DevAccount}:role/RoleCrossAccount"
+                  - !Sub "arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole"
+                  - !Sub "arn:aws:iam::${HomologAccount}:role/RoleCrossAccount"
+                  - !Sub "arn:aws:iam::${ProdAccount}:role/RoleCrossAccount"
+              -
+                Effect: Allow
+                Action:
+                  - "kms:Encrypt"
+                  - "kms:Decrypt"
+                  - "kms:ReEncrypt*"
+                  - "kms:GenerateDataKey*"
+                  - "kms:DescribeKey"
+                Resource: !GetAtt KMSKey.Arn 
+
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F3
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetBucketPolicy
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - Fn::Sub:
+                        - "arn:aws:s3:::${BucketName}/*"
+                        - BucketName: !Ref BucketArtifact
+                  - Fn::Sub:
+                        - "arn:aws:s3:::${BucketName}"
+                        - BucketName: !Ref BucketArtifact
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              -
+                Effect: Allow
+                Action:
+                  - "kms:Encrypt"
+                  - "kms:Decrypt"
+                  - "kms:ReEncrypt*"
+                  - "kms:GenerateDataKey*"
+                  - "kms:DescribeKey"
+                Resource: !GetAtt KMSKey.Arn
+
+
+  CodeCommitRepositoryInfraBase:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: cfn-ecs
+      RepositoryDescription: Repositorio de CloudFormation para Cluster ECS
+
+  PipelineInfra: 
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      RoleArn: !GetAtt CodePipeLineServiceRole.Arn
+      Name: !Ref AWS::StackName
+      ArtifactStore:
+        Type: S3
+        Location: !Ref BucketArtifact
+        EncryptionKey:
+          Id: !GetAtt KMSKey.Arn
+          Type: KMS
+    
+      Stages: 
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: "1"
+                Provider: CodeCommit
+              Configuration:
+                BranchName: master
+                RepositoryName: cfn-produto
+              OutputArtifacts:
+                - Name: Out-Source
+              RunOrder: 1
+        - Name: Test
+          Actions:
+            - Name: Cfn-Lint
+              ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: "1"
+                  Provider: CodeBuild
+              OutputArtifacts:
+                - Name: Out-Cfn-Lint
+              InputArtifacts:
+                - Name: Out-Source
+              Configuration:
+                  ProjectName: !Ref CfnLint
+              RunOrder: 1
+            - Name: Cfn_Nag
+              ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: "1"
+                  Provider: CodeBuild
+              OutputArtifacts:
+                - Name: Out-Cfn-Nag
+              InputArtifacts:
+                - Name: Out-Source
+              Configuration:
+                  ProjectName: !Ref CfnNag
+              RunOrder: 1
+        - Name: ECS-Cluster-Teste
+          Actions:
+            - Name: ChangeSetECSTest
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ChangeSetName: ChangeSet-ECS-Cluster-Teste
+                ActionMode: CHANGE_SET_REPLACE
+                StackName: ECS-Cluster-Teste
+                Capabilities: CAPABILITY_NAMED_IAM
+                TemplatePath: !Join [ "::", [ "Out-Source", "templates/Setup-ECS-Cluster.yaml"]]
+                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
+              InputArtifacts:
+                - Name: Out-Source
+              RunOrder: 1
+              RoleArn: !GetAtt CodePipeLineServiceRole.Arn
+            - Name: DeployChangeSetTest
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ChangeSetName: sample-lambda-dev
+                ActionMode: CHANGE_SET_EXECUTE
+                StackName: sample-lambda-dev
+                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
+              InputArtifacts:
+                - Name: Out-Source
+              RunOrder: 2
+              RoleArn: !GetAtt CodePipeLineServiceRole.Arn
+
+  CfnLint:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Description: CFN-Lint 
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: 'buildspecs/buildspec-cfn-lint.yml'
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:2.0
+      Artifacts:
+        Type: CODEPIPELINE
+      ServiceRole: !Ref CodeBuildServiceRole
+      TimeoutInMinutes: 10
+
+  CfnNag:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Description: CFN_NAG 
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: 'buildspecs/buildspec-cfn_nag.yml'
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/ruby:2.5.3
+      Artifacts:
+        Type: CODEPIPELINE
+      ServiceRole: !Ref CodeBuildServiceRole
+      TimeoutInMinutes: 10
