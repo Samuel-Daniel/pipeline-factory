@@ -199,6 +199,7 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:iam::${DevOpsAccount}:role/RoleCrossAccount"
                   - !Sub "arn:aws:iam::${DevAccount}:role/RoleCrossAccount"
+                  - !Sub "arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole"
                   - !Sub "arn:aws:iam::${HomologAccount}:role/RoleCrossAccount"
                   - !Sub "arn:aws:iam::${ProdAccount}:role/RoleCrossAccount"
               -
@@ -375,7 +376,7 @@ Resources:
               InputArtifacts:
                 - Name: Out-Source
               RunOrder: 1
-              RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
+              RoleArn: !GetAtt CodePipeLineServiceRole.Arn
             - Name: DeployChangeSetTest
               ActionTypeId:
                 Category: Deploy
@@ -390,7 +391,7 @@ Resources:
               InputArtifacts:
                 - Name: Out-Source
               RunOrder: 2
-              RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
+              RoleArn: !GetAtt CodePipeLineServiceRole.Arn
 
   CfnLint:
     Type: AWS::CodeBuild::Project
