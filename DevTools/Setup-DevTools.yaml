@@ -371,11 +371,11 @@ Resources:
                 StackName: ECS-Cluster-Teste
                 Capabilities: CAPABILITY_NAMED_IAM
                 TemplatePath: !Join [ "::", [ "Out-Source", "templates/Setup-ECS-Cluster.yaml"]]
-                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/RoleCrossAccount
+                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
               InputArtifacts:
                 - Name: Out-Source
               RunOrder: 1
-              RoleArn: !Sub arn:aws:iam::${DevAccount}:role/RoleCrossAccount
+              RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
             - Name: DeployChangeSetTest
               ActionTypeId:
                 Category: Deploy
@@ -386,11 +386,11 @@ Resources:
                 ChangeSetName: sample-lambda-dev
                 ActionMode: CHANGE_SET_EXECUTE
                 StackName: sample-lambda-dev
-                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/RoleCrossAccount
+                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
               InputArtifacts:
                 - Name: Out-Source
               RunOrder: 2
-              RoleArn: !Sub arn:aws:iam::${DevAccount}:role/RoleCrossAccount
+              RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
 
   CfnLint:
     Type: AWS::CodeBuild::Project
