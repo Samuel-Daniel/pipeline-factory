@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cross Account Role to Allow Access to CodePipeline in Tools Account
+
+Resources:
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ToolsAcctCodePipelineCodeCommitRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Ref ToolsAccount
+            Action:
+              - sts:AssumeRole
+      Path: /
+
+  Policy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ToolsAcctCodePipelineCodeCommitPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action:
+              - codecommit:BatchGetRepositories
+              - codecommit:Get*
+              - codecommit:GitPull
+              - codecommit:List*
+              - codecommit:CancelUploadArchive
+              - codecommit:UploadArchive
+              - s3:*
+            Resource: "*"
+          -
+            Effect: Allow
+            Action:
+              - kms:*
+            Resource: !Ref KMSKeyArn
+      Roles:
+        -
+          !Ref Role

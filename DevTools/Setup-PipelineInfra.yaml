@@ -1,0 +1,165 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  DevAccount:
+    Description: DevAccount
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Accounts/Dev'
+
+  HomologAccount:
+    Description: HomologAccount
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Accounts/Homolog'
+
+  ProdAccount:
+    Description: ProdAccount
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Accounts/Prod'
+
+  CodePipeLineServiceRole:
+    Description: CodePipeLineServiceRole
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Shared/Roles/CodePipeline'
+
+  CodeBuildServiceRole:
+    Description: CodeBuildServiceRole
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Shared/Roles/CodeBuild'
+
+  BucketArtifact:
+    Description: BucketArtifact
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Shared/BucketArtifact'
+
+  KMSKeyArn:
+    Description: KMSKeyArn
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Shared/KMSKeyArn'
+
+
+Resources:
+  CodeCommitRepositoryInfraBase:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: cfn-produto
+      RepositoryDescription: Repositorio de CloudFormation Shared para todo o Produto
+
+  PipelineInfra: 
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      RoleArn: !Ref CodePipeLineServiceRole
+      Name: !Ref AWS::StackName
+      ArtifactStore:
+        Type: S3
+        Location: !Ref BucketArtifact
+        EncryptionKey:
+          Id: !Ref KMSKeyArn
+          Type: KMS
+    
+      Stages: 
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: "1"
+                Provider: CodeCommit
+              Configuration:
+                BranchName: master
+                RepositoryName: cfn-produto
+              OutputArtifacts:
+                - Name: Out-Source
+              RunOrder: 1
+        - Name: Test
+          Actions:
+            - Name: Cfn-Lint
+              ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: "1"
+                  Provider: CodeBuild
+              OutputArtifacts:
+                - Name: Out-Cfn-Lint
+              InputArtifacts:
+                - Name: Out-Source
+              Configuration:
+                  ProjectName: !Ref CfnLint
+              RunOrder: 1
+            - Name: Cfn_Nag
+              ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: "1"
+                  Provider: CodeBuild
+              OutputArtifacts:
+                - Name: Out-Cfn-Nag
+              InputArtifacts:
+                - Name: Out-Source
+              Configuration:
+                  ProjectName: !Ref CfnNag
+              RunOrder: 1
+        - Name: Deploy
+          Actions:
+            - Name: CreateChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE 
+                Capabilities: CAPABILITY_IAM
+                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/cloudformationdeployer-role
+                StackName: SetupProduto
+                ChangeSetName: SetupProduto-ChangeSet
+                TemplatePath: !Join [ "::", [ "Out-Source", "templates/Setup-Networking.yaml"]]
+              InputArtifacts:
+                - Name: Out-Source
+              RunOrder: 1
+              RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
+            - Name: ExecuteChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                ChangeSetName: SetupProduto-ChangeSet
+                RoleArn: !Sub arn:aws:iam::${DevAccount}:role/cloudformationdeployer-role
+                StackName: SetupProduto
+              RunOrder: 2
+              RoleArn: !Sub arn:aws:iam::${DevAccount}:role/ToolsAcctCodePipelineCloudFormationRole
+
+  CfnLint:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Description: CFN-Lint 
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: 'buildspecs/buildspec-cfn-lint.yml'
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:2.0
+      Artifacts:
+        Type: CODEPIPELINE
+      ServiceRole: !Ref CodeBuildServiceRole
+      TimeoutInMinutes: 10
+
+  CfnNag:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Description: CFN_NAG 
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: 'buildspecs/buildspec-cfn_nag.yml'
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/ruby:2.5.3
+      Artifacts:
+        Type: CODEPIPELINE
+      ServiceRole: !Ref CodeBuildServiceRole
+      TimeoutInMinutes: 10

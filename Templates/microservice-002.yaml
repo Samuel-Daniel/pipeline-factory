@@ -107,6 +107,7 @@ Metadata:
           - KMSKeyArn
           - CodeBuildServiceRole
           - CodePipeLineServiceRole
+          - CriaFeaturePipeline
 
 Conditions: 
   ContinuousDelivery: !Or
