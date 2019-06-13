@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Criação da CrossAccountRole nas contas Dev, Homolog e Prod
+
+Parameters:
+  DevToolsAccount:
+    Description: DevAccount
+    Type:  Number
+  BucketArtifact:
+    Description: BucketArtifact
+    Type:  String
+  KMSKeyArn:
+    Description: KMSKeyArn
+    Type:  String
+
+Resources:
+
+  CrossAccountRoleSharedLibs:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CrossAccountRoleSharedLibs
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Ref DevToolsAccount
+            Action:
+              - sts:AssumeRole
+      Path: /
+  CrossAccountPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CrossAccountPolicySharedLibs
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action:
+              - codecommit:BatchGetRepositories
+              - codecommit:Get*
+              - codecommit:GitPull
+              - codecommit:List*
+              - codecommit:CancelUploadArchive
+              - codecommit:UploadArchive
+              - s3:*
+            Resource: "*"
+          -
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetBucketPolicy
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+             - !Join ['',['arn:aws:s3:::',!Ref BucketArtifact, '/*']]
+             - !Join ['',['arn:aws:s3:::',!Ref BucketArtifact]]
+          -
+            Effect: Allow
+            Action:
+              - kms:*
+            Resource: !Ref KMSKeyArn
+      Roles:
+        -
+          !Ref CrossAccountRoleSharedLibs
+
