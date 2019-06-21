@@ -1,0 +1,13 @@
+version: 0.2   
+env:  
+  parameter-store:  
+    HostSonar: "/Shared/HostSonar"  
+    TokenSonar: "/Shared/TokenSonar"  
+phases: 
+  install:
+    runtime-versions:
+      java: openjdk8
+      
+  build:  
+    commands:  
+      - mvn sonar:sonar -Dsonar.login=$SONAR_TOKEN -Dsonar.host.url=$HostSonar

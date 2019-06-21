@@ -1,0 +1,14 @@
+version: 0.2 
+phases:
+  install:
+    runtime-versions:
+      dotnet: 2.2
+  pre-build:
+    commands:
+      - echo Instando dependencias
+      - pip install -r requirements    
+  build: 
+    commands: 
+      - echo Executando o testUnit
+      - find . -name "*.py" -exec pylint '{}' \
+  

@@ -1,0 +1,1 @@
+# Documentação do scan do Aqua na Pipeline AWS

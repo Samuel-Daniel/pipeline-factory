@@ -1,0 +1,35 @@
+version: 0.2
+env:  
+  parameter-store:  
+    TokenAqua: "/Shared/TokenAqua"  
+    PipelineReportsBucket: "/Shared/PipelineReportsBucket"  
+phases:
+  install:
+    runtime-versions:
+      docker: 18
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - cp -r $CODEBUILD_SRC_DIR_Build/* $CODEBUILD_SRC_DIR_App/ 
+  build:
+    commands:
+      - cd $CODEBUILD_SRC_DIR_App 
+      - echo Building the Docker image para analise do Aqua... 
+      - echo "\r\n" >> Dockerfile 
+      - echo "ADD https://get.aquasec.com/microscanner ." >> Dockerfile 
+      - echo "USER 0" >> Dockerfile  
+      - echo "RUN chmod +x microscanner" >> Dockerfile            
+      - echo "RUN ./microscanner $TokenAqua --continue-on-failure --html" >> Dockerfile 
+      - cat Dockerfile 
+      - docker build --no-cache . >> results.html 
+ 
+      - sed -n '/<html/,/<\/html/p' results.html >> report-aqua.html 
+      - cat report-aqua.html 
+      - echo Copying report to s3... 
+      - aws s3 cp report-aqua.html s3://$PipelineReportsBucket/$CODEBUILD_BUILD_ID/report-aqua.html --acl public-read 
+      - echo Generate report link... 
+      - aws s3 presign s3://$PipelineReportsBucket/$CODEBUILD_BUILD_ID/report-aqua.html --expires-in 604800 
+artifacts:
+    files:
+       - $CODEBUILD_SRC_DIR_App/report-aqua.html
+    discard-paths: yes

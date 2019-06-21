@@ -1,0 +1,15 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      dotnet: 2.2
+  build:
+    commands:
+      - dotnet build src/HelloWorldJenkins
+  post_build:
+    commands:
+      - echo "Post Build"
+artifacts: 
+    files: 
+       - src/HelloWorldJenkins/bin/Debug/netcoreapp2.1/*.dll
+    discard-paths: yes

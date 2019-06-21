@@ -1,0 +1,14 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      java: openjdk8
+  pre_build: 
+    commands: 
+      - ls
+  build:
+    commands:
+      - echo Build started on `date`
+  post_build:
+    commands:
+      - echo Writing report...

@@ -1,0 +1,19 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      dotnet: 2.2
+  pre-build:
+    commands:
+      - echo Instando dependencias
+      - pip install -r requirements      
+  build:
+    commands:
+      - make build
+  post_build:
+    commands:
+      - echo "Post Build"
+artifacts: 
+    files: 
+       - *.pyc
+    discard-paths: no

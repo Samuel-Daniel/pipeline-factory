@@ -1,0 +1,34 @@
+version: 0.2
+env:  
+  parameter-store:  
+    Repo: "/Shared/PublisRepository"  
+
+phases:
+  install:
+    runtime-versions:
+      docker: 18
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - $(aws ecr get-login --registry-ids 141748752792 --no-include-email --region sa-east-1)
+      - cp -rpf $CODEBUILD_SRC_DIR_Build/* .
+      - cp -rpf $CODEBUILD_SRC_DIR_App/* .
+      - echo $CODEBUILD_RESOLVED_SOURCE_VERSION
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+  build:
+    commands:
+      - echo Building the Docker image...          
+      - docker build -t $Repo:latest .
+      - docker tag $Repo:latest $Repo:$IMAGE_TAG
+  post_build:
+    commands:
+       - echo Pushing the Docker images...
+       - docker push $Repo:latest
+       - docker push $Repo:$IMAGE_TAG
+       - printf '[{"name":"cluster-secret","imageUri":"%s"}]' $Repo:$IMAGE_TAG > build.json   
+       - cat build.json
+artifacts:
+    files:
+       - build.json
+    discard-paths: yes

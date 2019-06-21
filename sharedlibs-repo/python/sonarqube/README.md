@@ -1,0 +1,1 @@
+# Documentação para realização do Scan do Sonar

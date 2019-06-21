@@ -1,0 +1,31 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      docker: 18
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - $(aws ecr get-login --no-include-email --region sa-east-1)
+      - echo $CODEBUILD_RESOLVED_SOURCE_VERSION
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+      - cp $CODEBUILD_SRC_DIR_Build/*.dll $CODEBUILD_SRC_DIR_App/ 
+  build:
+    commands:
+      - cd $CODEBUILD_SRC_DIR_App
+      - echo Building the Docker image...                
+      - docker build -t $REPOSITORY:latest .      
+      - docker tag $REPOSITORY:latest $REPOSITORY:$IMAGE_TAG
+  post_build:
+    commands:
+       - echo Pushing the Docker images...
+       - docker images
+       - docker push $REPOSITORY:latest
+       - docker push $REPOSITORY:$IMAGE_TAG
+       - printf '[{"name":"cluster-secret","imageUri":"%s"}]' $REPOSITORY:$IMAGE_TAG > build.json   
+       - cat build.json
+artifacts:
+    files:
+       - $CODEBUILD_SRC_DIR_App/build.json
+    discard-paths: yes

@@ -1,0 +1,12 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      java: openjdk8
+  build:
+    commands:
+      - mvn package -f $CODEBUILD_SRC_DIR/pom.xml
+artifacts: 
+    files: 
+       - target/hello-world-0.1-SNAPSHOT.war
+    discard-paths: yes

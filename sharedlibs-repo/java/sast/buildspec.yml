@@ -1,0 +1,39 @@
+version: 0.2
+env:  
+  parameter-store:   
+    PipelineReportsBucket: "/Shared/PipelineReportsBucket"  
+    FortifyBucket: "/Shared/FortifyBucket"
+phases:
+  install:
+    runtime-versions:
+      java: openjdk8
+  pre_build: 
+    commands: 
+      - aws --version
+      - echo $FortifyBucket
+      - aws s3 cp s3://$FortifyBucket/fortify/fortify.zip /tmp/fortify.zip
+      - unzip /tmp/fortify.zip -d /tmp/
+      - tar -C /tmp/ -xf /tmp/Fortify.tar
+      - unzip /tmp/Fortify/Fortify_SCA_and_Apps_18.20/plugins/maven/maven-plugin-bin.zip -d /tmp/maven-plugin-bin/
+      - mvn install:install-file -Dfile=/tmp/maven-plugin-bin/pom.xml -DpomFile=/tmp/maven-plugin-bin/pom.xml
+      - mvn install:install-file -Dfile=/tmp/maven-plugin-bin/sca-maven-plugin/sca-maven-plugin-18.20.jar -DpomFile=/tmp/maven-plugin-bin/sca-maven-plugin/pom.xml
+      - export PATH=$PATH:/tmp/Fortify/Fortify_SCA_and_Apps_18.20/bin/
+  build:
+    commands:
+      - cd $CODEBUILD_SRC_DIR
+      - echo Build started on `date`
+      - sourceanalyzer -b app-aws mvn package -f $CODEBUILD_SRC_DIR/pom.xml com.fortify.sca.plugins.maven:sca-maven-plugin:translate
+      - sourceanalyzer -b app-aws -scan -f fortify.fpr
+  post_build:
+    commands:
+      - echo Writing report...
+      - ReportGenerator -format pdf -f fortify.pdf -source fortify.fpr
+      - aws s3 cp fortify.pdf s3://$PipelineReportsBucket/fortify/$CODEBUILD_BUILD_ID/fortify.pdf --acl public-read
+      - echo Generate report link...
+      - aws s3 presign s3://$PipelineReportsBucket/fortify/$CODEBUILD_BUILD_ID/fortify.pdf --expires-in 604800
+ 
+artifacts: 
+    files: 
+       - fortify.fpr
+       - fortify.pdf
+    discard-paths: no   

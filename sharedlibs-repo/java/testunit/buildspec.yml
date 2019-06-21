@@ -1,0 +1,13 @@
+version: 0.2 
+phases:
+  install:
+    runtime-versions:
+      java: openjdk8
+  build: 
+    commands: 
+      - echo Executando o testUnit
+      - echo "Saida do TestUnit" >> output.html
+      - ls
+artifacts:
+  files:
+    - output.html
