@@ -52,7 +52,7 @@ ProfileArchitectureAccount="Lab-ArchitectureAccount"
 #   - Repositorio sharedlibs
 #   - Bucket sharedlibs
 echo Creating Stack SharedLibs @ DevOpsAccount - $DevOpsAccount using $ProfileDevOpsAccount profile
-aws cloudformation deploy --stack-name SharedLibs --template-file DevOps-SharedLibs.yaml \
+aws cloudformation deploy --stack-name SharedLibs --template-file DevSecOps-Account/DevOps-SharedLibs.yaml \
 --parameter-overrides DevToolsAccount=$DevToolsAccount DevAccount=$DevAccount HomologAccount=$HomologAccount ProdAccount=$ProdAccount \
 --capabilities CAPABILITY_NAMED_IAM \
 --profile $ProfileDevOpsAccount 
@@ -78,7 +78,7 @@ echo URL do template: s3://$TemplateURL/$Template.yaml
 #   - Lambda que cria pipelines
 #   - Role para a Pipeline
 echo Creating Stack Setup-DevTools @ DevTools - $DevToolsAccount using $ProfileDevToolsAccount profile
-aws cloudformation deploy --stack-name Setup-DevTools  --template-file DevTools-Setup.yaml \
+aws cloudformation deploy --stack-name Setup-DevTools  --template-file DevTools-Account/DevTools-Setup.yaml \
 --parameter-overrides DevOpsAccount=$DevOpsAccount DevAccount=$DevAccount HomologAccount=$HomologAccount ProdAccount=$ProdAccount TemplateURL=$TemplateURL \
 --capabilities CAPABILITY_NAMED_IAM \
 --profile $ProfileDevToolsAccount
@@ -104,7 +104,7 @@ echo KMSKeyArn: $KMSKeyArn
 #         Nome da Role criada: CrossAccountRoleSharedLibs
 echo Creating Stack CrossAccountRoleSharedLibs @ DevOpsAccount - $DevOpsAccount using $ProfileDevOpsAccount profile
 
-aws cloudformation deploy --stack-name CrossAccountRoleSharedLibs --template-file DevOps-CrossAccountRoleSharedLibs.yaml \
+aws cloudformation deploy --stack-name CrossAccountRoleSharedLibs --template-file DevSecOps-Account/DevOps-CrossAccountRoleSharedLibs.yaml \
 --parameter-overrides DevToolsAccount=$DevToolsAccount BucketArtifact=$BucketArtifact KMSKeyArn=$KMSKeyArn \
 --capabilities CAPABILITY_NAMED_IAM \
 --profile $ProfileDevOpsAccount 
@@ -123,17 +123,17 @@ echo Creating Stack CrossAccountRole @ DevAccount - $DevAccount using $ProfileDe
 echo Creating Stack CrossAccountRole @ HomologAccount - $HomologAccount using $ProfileHomologAccount profile
 echo Creating Stack CrossAccountRole @ ProdAccount - $ProdAccount using $ProfileProdAccount profile
 
-aws cloudformation deploy --stack-name CrossAccountRole --template-file GroupAccounts-CrossAccountRole.yaml \
+aws cloudformation deploy --stack-name CrossAccountRole --template-file DevHomProd-Accounts/GroupAccounts-CrossAccountRole.yaml \
 --parameter-overrides DevToolsAccount=$DevToolsAccount BucketArtifact=$BucketArtifact KMSKeyArn=$KMSKeyArn \
 --capabilities CAPABILITY_NAMED_IAM \
 --profile $ProfileDevAccount \
 &
-aws cloudformation deploy --stack-name CrossAccountRole --template-file GroupAccounts-CrossAccountRole.yaml \
+aws cloudformation deploy --stack-name CrossAccountRole --template-file DevHomProd-Accounts/GroupAccounts-CrossAccountRole.yaml \
 --parameter-overrides DevToolsAccount=$DevToolsAccount BucketArtifact=$BucketArtifact KMSKeyArn=$KMSKeyArn \
 --capabilities CAPABILITY_NAMED_IAM \
 --profile $ProfileHomologAccount \
 &
-aws cloudformation deploy --stack-name CrossAccountRole --template-file GroupAccounts-CrossAccountRole.yaml \
+aws cloudformation deploy --stack-name CrossAccountRole --template-file DevHomProd-Accounts/GroupAccounts-CrossAccountRole.yaml \
 --parameter-overrides DevToolsAccount=$DevToolsAccount BucketArtifact=$BucketArtifact KMSKeyArn=$KMSKeyArn \
 --capabilities CAPABILITY_NAMED_IAM \
 --profile $ProfileProdAccount

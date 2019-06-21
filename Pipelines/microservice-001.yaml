@@ -1,0 +1,580 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Template para Micro Servico | 001"
+
+Parameters:
+
+  FeatureName:
+    Description: Nome da feature do produto
+    Type:  String
+
+  TemplateName:
+    Description: Template da pipeline
+    Type:  String
+    Default: 'microservice-001' 
+    AllowedValues:  
+      - 'microservice-001' 
+      - 'microservice-002'  
+      - 'mobile-android-001'  
+      - 'mobile-android-002'  
+      - 'mobile-ios-001'  
+      - 'mobile-ios-002'  
+      - 'web-3tier-001'  
+      - 'web-3tier-002'  
+
+  Runtime: 
+    Description: Runtime da aplicacao
+    Type: String 
+    Default: 'java: openjdk11'
+    AllowedValues:  
+      - 'java: openjdk8' 
+      - 'java: openjdk11'  
+      - 'dotnet: 2.2' 
+      - 'python: 3.7' 
+
+  MicroServiceName:
+    Description: Nome do micro servico
+    Type:  String
+
+  BranchName:
+    Description: Nome da Branch
+    Type:  String
+    Default: "master"
+
+  DevOpsAccount:
+    Description: DevOpsAccount
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Accounts/DevOps'
+
+  DevAccount:
+    Description: DevAccount
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Accounts/Dev'
+
+  HomologAccount:
+    Description: HomologAccount
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Accounts/Homolog'
+
+  ProdAccount:
+    Description: ProdAccount
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Accounts/Prod'
+
+  BucketArtifact:
+    Description: BucketArtifact
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Shared/BucketArtifact'
+
+  KMSKeyArn:
+    Description: KMSKeyArn
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Shared/KMSKeyArn'
+
+  LambdaCriaFeaturePipeline:
+    Description: LambdaCriaFeaturePipeline
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/Shared/LambdaCriaFeaturePipeline'
+
+  TokenAqua: 
+    Description: TokenAqua
+    Type:  String
+    Default: '<token>'
+
+  BuildCustomizado: 
+    Description: Usar arquivo buildspec do seu repositorio ao inves da configuracao padrao da pipeline.
+    Type: String
+    Default: 'false'
+    AllowedValues:  
+      - 'true' 
+      - 'false' 
+
+  RepositorioGitLab: 
+    Description: Nome do repositorio no GitLab do Itau. 
+    Type:  String
+    Default: '<repositorio>'
+
+Metadata:  
+  AWS::CloudFormation::Interface:  
+    ParameterGroups:  
+      -  
+        Label:  
+          default: "PREENCHIMENTO OBRIGATORIO" 
+        Parameters:  
+          - FeatureName 
+          - MicroServiceName 
+          - RepositorioGitLab
+          - Runtime 
+          - BuildCustomizado
+      -  
+        Label:  
+          default: "NAO FACA ALTERACOES AQUI" 
+        Parameters:  
+          - DevOpsAccount
+          - DevAccount
+          - HomologAccount
+          - ProdAccount 
+          - BucketArtifact
+          - KMSKeyArn
+          - LambdaCriaFeaturePipeline
+          - TokenAqua
+          - BranchName
+          - TemplateName
+
+Conditions: 
+  ContinuousDelivery: !Or
+    - !Equals ["master", !Ref BranchName]
+    - !Equals ["develop", !Ref BranchName]
+  BranchMaster: !Equals [ "master", !Ref BranchName ]
+  IsBuildCustom: !Equals [ !Ref BuildCustomizado, true ] 
+
+Resources:
+
+  Repository:
+    Type: AWS::CodeCommit::Repository
+    Condition: BranchMaster
+    Properties:
+      Code:
+        S3: 
+          Bucket: templates-863884412775
+          Key: sample-app.zip
+      RepositoryName: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName']]
+      RepositoryDescription: Repositorio do Micro Servico
+
+  Pipeline:
+    Type: "AWS::CodePipeline::Pipeline"
+    Properties:
+      Name: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', !Ref 'BranchName']]
+      RoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/PipelineRole'
+      ArtifactStore:
+        Type: S3
+        Location: !Ref BucketArtifact
+        EncryptionKey:
+          Id: !Ref KMSKeyArn
+          Type: KMS
+
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: App
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: "1"
+                Provider: CodeCommit
+              Configuration:
+                RepositoryName: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName']]
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: App 
+              RunOrder: 1
+            - Name: "Libs"
+              RoleArn: !Sub "arn:aws:iam::${DevOpsAccount}:role/CrossAccountRoleSharedLibs"
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: "1"
+              Configuration:
+                BranchName: master
+                RepositoryName: sharedlibs
+                PollForSourceChanges: false
+              InputArtifacts: []
+              OutputArtifacts:
+                - Name: Libs 
+              RunOrder: 1
+ 
+        - Name: Continuous-Integration
+          Actions:
+            - Name: TestUnit
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: "1"
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: TestUnit 
+              InputArtifacts:
+                - Name: App 
+                - Name: Libs                 
+              Configuration:
+                ProjectName: !Join ['-', [!Ref 'FeatureName',!Ref 'MicroServiceName', 'TestesUnitarios' ]]
+                PrimarySource: App 
+              RunOrder: 1
+
+            - Name: Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: "1"
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: Build 
+              InputArtifacts:
+                - Name: App 
+                - Name: Libs                 
+              Configuration:
+                ProjectName: !Join ['-', [!Ref 'FeatureName',!Ref 'MicroServiceName', 'Build' ]]
+                PrimarySource: App 
+              RunOrder: 1
+
+            - Name: Sonar
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: "1"
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: Sonar 
+              InputArtifacts:
+                - Name: App 
+                - Name: Libs                 
+              Configuration:
+                ProjectName: !Join ['-', [!Ref 'FeatureName',!Ref 'MicroServiceName', 'Sonar' ]]
+                PrimarySource: App 
+              RunOrder: 1
+
+            - Name: SAST-Fortify
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: "1"
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: Fortify 
+              InputArtifacts:
+                - Name: App 
+                - Name: Libs                 
+              Configuration:
+                ProjectName: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Fortify' ]]
+                PrimarySource: App 
+              RunOrder: 1
+
+            - Name: Container-Security-AQUA
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: "1"
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: AQUA 
+              InputArtifacts:
+                - Name: App 
+                - Name: Libs                 
+                - Name: Build                
+              Configuration:
+                ProjectName: !Join ['-', [!Ref 'FeatureName',!Ref 'MicroServiceName', 'Aqua' ]]
+                PrimarySource: Libs 
+              RunOrder: 2
+
+        - !If 
+          - ContinuousDelivery 
+          - Name: Publish
+            Actions:
+              - Name: Publish
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: "1"
+                  Provider: CodeBuild
+                OutputArtifacts:
+                    - Name: Publish 
+                InputArtifacts:
+                    - Name: App 
+                    - Name: Build 
+                    - Name: Libs                 
+                Configuration:
+                  ProjectName: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Publish' ]]
+                  PrimarySource: Libs 
+                RunOrder: 3
+          - !Ref AWS::NoValue 
+
+        - !If 
+          - ContinuousDelivery 
+          - Name: Testes
+            Actions:
+              - Name: Testes
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: "1"
+                  Provider: CodeBuild
+                OutputArtifacts:
+                  - Name: testes
+                InputArtifacts:
+                  - Name: App
+                  - Name: Libs
+                Configuration:
+                  ProjectName: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Testes' ]]
+                  PrimarySource: Libs
+                RunOrder: 3
+          - !Ref AWS::NoValue 
+
+        - !If 
+          - ContinuousDelivery 
+          - Name: Deploy
+            Actions:
+              - Name: Deploy
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: "1"
+                  Provider: CodeBuild
+                OutputArtifacts:
+                  - Name: Out-Deploy
+                InputArtifacts:
+                  - Name: App
+                  - Name: Libs
+                Configuration:
+                  ProjectName: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Deploy' ]]
+                  PrimarySource: Libs
+                RunOrder: 3
+          - !Ref AWS::NoValue 
+
+  Deploy:
+    Type: AWS::CodeBuild::Project
+    Condition: BranchMaster
+    Properties:
+      Name: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Deploy' ]]
+      Description: Deploy
+      EncryptionKey: !Ref KMSKeyArn
+      ServiceRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/PipelineRole'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:2.0
+        PrivilegedMode: true
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec/deploy.yml
+      TimeoutInMinutes: 10
+
+  Testes:
+    Type: AWS::CodeBuild::Project
+    Condition: BranchMaster
+    Properties:
+      Name: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Testes' ]]
+      Description: Testes 
+      EncryptionKey: !Ref KMSKeyArn
+      ServiceRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/PipelineRole'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:2.0
+        PrivilegedMode: true
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec/testes.yml
+      TimeoutInMinutes: 10
+
+  BuildTestUnit:
+    Type: AWS::CodeBuild::Project
+    Condition: BranchMaster
+    Properties:
+      Name: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'TestesUnitarios' ]]
+      Description: Testes Unitarios
+      EncryptionKey: !Ref KMSKeyArn
+      ServiceRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/PipelineRole'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:2.0
+        PrivilegedMode: true
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec:  
+            !If  [ "IsBuildCustom", 
+                    "buildspec_testunit.yml",  
+                    !Join ["",['../01/',!Select [0, !Split [":", !Ref Runtime]] ,'/testunit/buildspec.yml' ]]  
+                 ] 
+      TimeoutInMinutes: 10
+
+  Build:
+    Type: AWS::CodeBuild::Project
+    Condition: BranchMaster
+    Properties:
+      Name: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Build' ]]
+      Description: Build da Aplicação
+      EncryptionKey: !Ref KMSKeyArn
+      ServiceRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/PipelineRole'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:2.0
+        PrivilegedMode: true
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !If  [ "IsBuildCustom", 
+                          "buildspec.yml", 
+                          !Join ["",['../01/',!Select [0, !Split [":", !Ref Runtime]] ,'/build/buildspec.yml' ]] 
+                        ] 
+      TimeoutInMinutes: 10
+
+  BuildSonar:
+    Type: AWS::CodeBuild::Project
+    Condition: BranchMaster
+    Properties:
+      Name: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Sonar' ]]
+      Description: Sonar
+      EncryptionKey: !Ref KMSKeyArn
+      ServiceRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/PipelineRole'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:2.0
+        PrivilegedMode: true
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Join ["",['../01/',!Select [0, !Split [":", !Ref Runtime]] ,'/sonarqube/buildspec.yml' ]] 
+      TimeoutInMinutes: 10
+
+  BuildSAST:
+    Type: AWS::CodeBuild::Project
+    Condition: BranchMaster
+    Properties:
+      Name: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Fortify' ]]
+      Description: Fortify
+      EncryptionKey: !Ref KMSKeyArn
+      ServiceRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/PipelineRole'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:2.0
+        PrivilegedMode: true
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Join ["",['../01/',!Select [0, !Split [":", !Ref Runtime]] ,'/sast/buildspec.yml' ]] 
+      TimeoutInMinutes: 10
+
+  BuildContainerSecurity:
+    Type: AWS::CodeBuild::Project
+    Condition: BranchMaster
+    Properties:
+      Name: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Aqua' ]]
+      Description: Aqua
+      EncryptionKey: !Ref KMSKeyArn
+      ServiceRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/PipelineRole'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:2.0
+        PrivilegedMode: true
+        EnvironmentVariables:         
+          - Name: TOKEN_AQUA 
+            Value: !Ref TokenAqua 
+          - Name: s3bucket 
+            Value: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'reports' ]] 
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Join ["",['',!Select [0, !Split [":", !Ref Runtime]] ,'/container-security/buildspec.yml' ]] 
+      TimeoutInMinutes: 10
+
+  Publish:
+    Type: AWS::CodeBuild::Project
+    Condition: BranchMaster
+    Properties:
+      Name: !Join ['-', [!Ref 'FeatureName', !Ref 'MicroServiceName', 'Publish' ]]
+      Description: Publish
+      EncryptionKey: !Ref KMSKeyArn
+      ServiceRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/PipelineRole'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:2.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: REPOSITORY 
+            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${FeatureName}-${MicroServiceName}-local 
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Join ["",['',!Select [0, !Split [":", !Ref Runtime]] ,'/publish/buildspec.yml' ]]
+      TimeoutInMinutes: 10
+
+  CriaPipelineRule:
+    Type: AWS::Events::Rule
+    Condition: BranchMaster
+    Properties: 
+      Description: "EventRule"
+      EventPattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - 'CodeCommit Repository State Change'
+        resources:
+          - !GetAtt Repository.Arn
+        detail:
+          event:
+            - referenceCreated
+          referenceType:
+            - branch
+      State: ENABLED
+      Targets: 
+      - Arn: !Ref LambdaCriaFeaturePipeline
+        Id: LambdaCriaFeaturePipeline
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: BranchMaster
+    Properties:
+      FunctionName: !Ref LambdaCriaFeaturePipeline
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceArn: 
+        Fn::GetAtt:
+          - CriaPipelineRule
+          - Arn
+
+  TemplateNameParameter:
+    Type: "AWS::SSM::Parameter"
+    Condition: BranchMaster
+    Properties:
+      Name: !Sub /App/${FeatureName}/${MicroServiceName}/TemplateName
+      Type: "String"
+      Value: !Ref TemplateName
+
+  RuntimeParameter:
+    Type: "AWS::SSM::Parameter"
+    Condition: BranchMaster
+    Properties:
+      Name: !Sub /App/${FeatureName}/${MicroServiceName}/Runtime
+      Type: "String"
+      Value: !Ref Runtime
+
+  BuildCustomizadoParameter:
+    Type: "AWS::SSM::Parameter"
+    Condition: BranchMaster
+    Properties:
+      Name: !Sub /App/${FeatureName}/${MicroServiceName}/BuildCustomizado
+      Type: "String"
+      Value: !Ref BuildCustomizado
+
+  TokenAquaParameter:
+    Type: "AWS::SSM::Parameter"
+    Condition: BranchMaster
+    Properties:
+      Name: !Sub /App/${FeatureName}/${MicroServiceName}/TokenAqua
+      Type: "String"
+      Value: !Ref TokenAqua
+
+  RepositorioGitLabParameter:
+    Type: "AWS::SSM::Parameter"
+    Condition: BranchMaster
+    Properties:
+      Name: !Sub /App/${FeatureName}/${MicroServiceName}/RepositorioGitLab
+      Type: "String"
+      Value: !Ref RepositorioGitLab
